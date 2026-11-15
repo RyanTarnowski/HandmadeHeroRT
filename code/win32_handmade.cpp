@@ -1,11 +1,4 @@
-#include <Windows.h>
 #include <stdint.h>
-#include <stdio.h>
-#include <xinput.h>
-#include <dsound.h>
-
-// TODO: Implement sine ourselves
-#include <math.h>
 
 #define internal static
 #define local_persist static
@@ -25,6 +18,16 @@ typedef uint64_t uint64;
 
 typedef float real32;
 typedef double real64;
+
+#include "handmade.cpp"
+
+#include <Windows.h>
+#include <stdio.h>
+#include <xinput.h>
+#include <dsound.h>
+
+// TODO: Implement sine ourselves
+#include <math.h>
 
 struct win32_offscreen_Buffer
 {
@@ -63,7 +66,6 @@ X_INPUT_SET_STATE(XInputSetStateStub)
 	return(ERROR_DEVICE_NOT_CONNECTED);
 }
 global_variable x_input_set_state* XInputSetState_ = XInputSetStateStub;
-
 #define XInputSetState XInputSetState_
 
 
@@ -186,27 +188,6 @@ Win32GetWindowDimension(HWND Window)
 
 	return Result;
 };
-
-internal void
-RenderWeirdGradient(win32_offscreen_Buffer *Buffer, int BlueOffset, int GreenOffset)
-{
-	uint8* Row = (uint8*)Buffer->Memory;
-	for (int Y = 0; Y < Buffer->Height; ++Y)
-	{
-		uint32* Pixel = (uint32*)Row;
-		for (int X = 0; X < Buffer->Width; ++X)
-		{
-			uint8 Blue = (X + BlueOffset);
-			uint8 Green = (Y + GreenOffset);
-			uint8 Red = 0;
-			uint8 Alpha = 0;
-
-			// Shifting Green, Red, Alpha bits up by 8 then bitwise OR them together
-			*Pixel++ = ((Alpha << 24) | (Red << 16) | (Green << 8) | Blue);
-		}
-		Row += Buffer->Pitch;
-	}
-}
 
 internal void
 Win32ResizeDIBSection(win32_offscreen_Buffer *Buffer, int Width, int Height)
@@ -591,7 +572,12 @@ WinMain(HINSTANCE Instance,
 				// Set Vibration
 				XInputSetState(0, &Vibration);
 
-				RenderWeirdGradient(&GlobalBackBuffer, XOffset, YOffset);
+				game_offscreen_Buffer Buffer = {};
+				Buffer.Memory = GlobalBackBuffer.Memory;
+				Buffer.Width = GlobalBackBuffer.Width;
+				Buffer.Height = GlobalBackBuffer.Height;
+				Buffer.Pitch = GlobalBackBuffer.Pitch;
+				GameUpdateAndRender(&Buffer, XOffset, YOffset);
 
 				// DirectSound output test
 				DWORD PlayCursor;
@@ -603,7 +589,6 @@ WinMain(HINSTANCE Instance,
 					DWORD TargetCursor = (PlayCursor + (SoundOutput.LatencySampleCount * SoundOutput.BytesPerSample)) % SoundOutput.SecondaryBufferSize;
 					DWORD BytesToWrite;
 
-					// TODO: Change this to use a lower latency offset from the TargetCursor when we actually start having sound affects.
 					if (ByteToLock > TargetCursor)
 					{
 						BytesToWrite = SoundOutput.SecondaryBufferSize - ByteToLock;
@@ -635,9 +620,9 @@ WinMain(HINSTANCE Instance,
 				real64 FPS = (real64)PerfCountFrequency / (real64)CounterElapsed;
 				real64 MCPF = ((real64)CyclesElapsed / (1000.0f * 1000.0f));
 
-				char Buffer[256];
-				sprintf(Buffer, "%.02fms/f, %.02ff/s, %.02fmc/f\n", MSPF, FPS, MCPF);
-				OutputDebugStringA(Buffer);
+				char CounterBuffer[256];
+				sprintf(CounterBuffer, "%.02fms/f, %.02ff/s, %.02fmc/f\n", MSPF, FPS, MCPF);
+				OutputDebugStringA(CounterBuffer);
 
 				LastCounter = EndCounter;
 				LastCycleCount = EndCycleCount;
